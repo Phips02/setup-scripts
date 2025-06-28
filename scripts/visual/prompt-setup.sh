@@ -53,7 +53,7 @@ backup_bashrc() {
 
 # Fonction pour vérifier si le prompt existe déjà
 check_existing_prompt() {
-    if grep -q "┌──(" ~/.bashrc 2>/dev/null; then
+    if grep -q "Prompt personnalisé moderne - Setup Scripts" ~/.bashrc 2>/dev/null; then
         log "WARNING" "Un prompt personnalisé existe déjà dans .bashrc"
         echo -n "Voulez-vous le remplacer ? (y/N): "
         read -r reply
@@ -63,8 +63,17 @@ check_existing_prompt() {
             exit 0
         fi
         
-        # Supprimer l'ancien prompt personnalisé
-        if sed -i '/┌──(/d' ~/.bashrc; then
+        # Supprimer tout le bloc du prompt personnalisé existant
+        log "INFO" "Suppression de l'ancien prompt..."
+        if awk '
+            /^# ============================================$/ && 
+            getline && /Prompt personnalisé moderne - Setup Scripts/ {
+                # Ignorer tout jusquà la fin du bloc
+                while (getline && !/^# ============================================$/) {}
+                next
+            }
+            { print }
+        ' ~/.bashrc > ~/.bashrc.tmp && mv ~/.bashrc.tmp ~/.bashrc; then
             log "SUCCESS" "Ancien prompt supprimé"
         else
             log "ERROR" "Impossible de supprimer l'ancien prompt"
