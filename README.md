@@ -31,6 +31,7 @@ apt update && apt install -y git      # Debian/Ubuntu
 # 2. Cloner et déployer
 git clone https://github.com/Phips02/setup-scripts.git
 cd setup-scripts
+chmod +x deploy.sh
 ./deploy.sh --interactive
 ```
 
