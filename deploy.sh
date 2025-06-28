@@ -282,6 +282,12 @@ execute_module() {
             # Donner les permissions si nécessaire
             chmod +x "$script" 2>/dev/null || true
             
+            # Définir AUTO_REPLACE=true pour les installations automatiques
+            # Détecter si on est en mode curl (pas de terminal interactif réel)
+            if [[ ! -t 0 ]] || [[ "${CURL_MODE:-false}" == "true" ]]; then
+                export AUTO_REPLACE=true
+            fi
+            
             if bash "$script"; then
                 log "SUCCESS" "$script_name terminé avec succès"
             else
@@ -361,6 +367,7 @@ main() {
 
 clone_and_rerun() {
     log "INFO" "Scripts non disponibles localement - Clonage du repository..."
+    export CURL_MODE=true  # Marquer qu'on est en mode curl
     
     local temp_dir="/tmp/setup-scripts-$$"
     

@@ -20,6 +20,9 @@ NC='\033[0m' # No Color
 # Configuration du prompt personnalisé
 CUSTOM_PS1='export PS1="\[\e[1;32m\]┌──(\[\e[m\]\[\e[1;34m\]\u\[\e[m\]\[\e[1;32m\] ► \[\e[m\]\[\e[1;34m\]\h\[\e[m\]\[\e[1;32m\])-[\[\e[m\]\[\e[38;5;214m\]\w\[\e[m\]\[\e[1;32m\]]\n└─\[\e[m\]\[\e[1;37m\]\$ \[\e[0m\]"'
 
+# Mode automatique (remplacer sans demander)
+AUTO_REPLACE=${AUTO_REPLACE:-false}
+
 # Fonction de logging uniforme avec le script principal
 log() {
     local level="$1"
@@ -56,12 +59,17 @@ check_existing_prompt() {
     # Détecter les prompts personnalisés (avec le caractère spécial ┌ ou les commentaires)
     if grep -q "┌──(" ~/.bashrc 2>/dev/null || grep -q "Prompt personnalisé moderne - Setup Scripts" ~/.bashrc 2>/dev/null; then
         log "WARNING" "Un prompt personnalisé existe déjà dans .bashrc"
-        echo -n "Voulez-vous le remplacer ? (y/N): "
-        read -r reply
         
-        if [[ ! "$reply" =~ ^[Yy]$ ]]; then
-            log "INFO" "Installation annulée par l'utilisateur"
-            exit 0
+        if [[ "$AUTO_REPLACE" == "true" ]]; then
+            log "INFO" "Mode automatique - Remplacement du prompt existant"
+        else
+            echo -n "Voulez-vous le remplacer ? (y/N): "
+            read -r reply < /dev/tty
+            
+            if [[ ! "$reply" =~ ^[Yy]$ ]]; then
+                log "INFO" "Installation annulée par l'utilisateur"
+                exit 0
+            fi
         fi
         
         # Supprimer tous les prompts personnalisés existants
