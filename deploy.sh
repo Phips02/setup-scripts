@@ -10,7 +10,11 @@
 set -euo pipefail  # Mode strict
 
 # Variables globales
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    SCRIPT_DIR="$(pwd)"
+fi
 LOG_DIR="$SCRIPT_DIR/logs"
 CONFIG_DIR="$SCRIPT_DIR/config"
 SCRIPTS_DIR="$SCRIPT_DIR/scripts"
@@ -127,7 +131,19 @@ check_requirements() {
     # Créer les dossiers nécessaires
     mkdir -p "$LOG_DIR"
     
+    # Donner les permissions d'exécution aux scripts
+    fix_permissions
+    
     log "SUCCESS" "Prérequis validés"
+}
+
+fix_permissions() {
+    log "INFO" "Vérification des permissions des scripts..."
+    
+    if [[ -d "$SCRIPTS_DIR" ]]; then
+        find "$SCRIPTS_DIR" -name "*.sh" -exec chmod +x {} \; 2>/dev/null
+        log "SUCCESS" "Permissions des scripts corrigées"
+    fi
 }
 
 install_prerequisites() {
@@ -226,15 +242,31 @@ execute_module() {
     
     log "INFO" "Exécution du module: $module"
     
+    # Compter les scripts disponibles
+    local script_count=0
+    for script in "$module_dir"/*.sh; do
+        [[ -f "$script" ]] && ((script_count++))
+    done
+    
+    if [[ $script_count -eq 0 ]]; then
+        log "WARNING" "Aucun script trouvé dans le module '$module'"
+        return 1
+    fi
+    
     # Exécuter tous les scripts du module
+    local script_num=0
     for script in "$module_dir"/*.sh; do
         if [[ -f "$script" ]]; then
+            ((script_num++))
             local script_name=$(basename "$script")
-            log "INFO" "Exécution de: $script_name"
+            log "INFO" "[$script_num/$script_count] Exécution de: $script_name"
             
             if [[ $DRY_RUN == true ]]; then
                 log "DEBUG" "[DRY-RUN] $script"
             else
+                # Donner les permissions si nécessaire
+                chmod +x "$script" 2>/dev/null || true
+                
                 if bash "$script"; then
                     log "SUCCESS" "$script_name terminé avec succès"
                 else
@@ -244,17 +276,20 @@ execute_module() {
             fi
         fi
     done
+    
+    return 0
 }
 
 deploy_modules() {
     if [[ -z "$MODULES" ]]; then
         log "ERROR" "Aucun module spécifié"
-        exit 1
+        return 1
     fi
     
     IFS=',' read -ra MODULE_LIST <<< "$MODULES"
     local total_modules=${#MODULE_LIST[@]}
     local current=0
+    local failed_modules=()
     
     log "INFO" "Déploiement de $total_modules module(s)"
     
@@ -266,13 +301,24 @@ deploy_modules() {
             log "SUCCESS" "Module '$module' déployé avec succès"
         else
             log "ERROR" "Échec du déploiement du module '$module'"
-            exit 1
+            failed_modules+=("$module")
         fi
         echo
     done
+    
+    # Vérifier s'il y a eu des échecs
+    if [[ ${#failed_modules[@]} -gt 0 ]]; then
+        log "ERROR" "Modules en échec: ${failed_modules[*]}"
+        return 1
+    fi
+    
+    return 0
 }
 
 main() {
+    # Gérer les signaux pour afficher le résumé même en cas d'interruption
+    trap 'show_final_summary "INTERRUPTED"' INT TERM
+    
     banner
     
     # Vérifications préliminaires
@@ -289,18 +335,48 @@ main() {
     fi
     
     # Déployer les modules
-    deploy_modules
+    if deploy_modules; then
+        show_final_summary "SUCCESS"
+    else
+        show_final_summary "ERROR"
+        exit 1
+    fi
+}
+
+show_final_summary() {
+    local status="$1"
     
-    # Résumé final
-    echo -e "${GREEN}"
-    echo "================================================================="
-    echo "🎉 DÉPLOIEMENT TERMINÉ AVEC SUCCÈS!"
-    echo "================================================================="
-    echo -e "${NC}"
-    log "SUCCESS" "Déploiement terminé - Log: $LOG_FILE"
-    
-    echo -e "${BLUE}📝 Log détaillé:${NC} $LOG_FILE"
-    echo -e "${BLUE}🔄 Pour redémarrer:${NC} sudo reboot"
+    case "$status" in
+        "SUCCESS")
+            echo -e "${GREEN}"
+            echo "================================================================="
+            echo "🎉 DÉPLOIEMENT TERMINÉ AVEC SUCCÈS!"
+            echo "================================================================="
+            echo -e "${NC}"
+            log "SUCCESS" "Déploiement terminé - Log: $LOG_FILE"
+            
+            echo -e "${BLUE}📝 Log détaillé:${NC} $LOG_FILE"
+            echo -e "${BLUE}🔄 Pour appliquer les changements:${NC} source ~/.bashrc"
+            echo -e "${BLUE}💡 Ou redémarrez votre terminal${NC}"
+            ;;
+        "ERROR")
+            echo -e "${RED}"
+            echo "================================================================="
+            echo "❌ DÉPLOIEMENT ÉCHOUÉ"
+            echo "================================================================="
+            echo -e "${NC}"
+            log "ERROR" "Déploiement échoué - Log: $LOG_FILE"
+            echo -e "${BLUE}📝 Consultez les logs:${NC} $LOG_FILE"
+            ;;
+        "INTERRUPTED")
+            echo -e "${YELLOW}"
+            echo "================================================================="
+            echo "⚠️  DÉPLOIEMENT INTERROMPU"
+            echo "================================================================="
+            echo -e "${NC}"
+            log "WARNING" "Déploiement interrompu - Log: $LOG_FILE"
+            ;;
+    esac
 }
 
 # =================================================================
