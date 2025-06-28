@@ -188,7 +188,7 @@ interactive_mode() {
     local selection=""
     while [[ -z "$selection" ]]; do
         echo -n "Sélectionnez les modules (ex: 1 ou 'a' pour tous disponibles): "
-        read -r selection
+        read -r selection < /dev/tty
         
         # Validation de l'entrée
         if [[ -z "$selection" ]]; then
@@ -212,7 +212,7 @@ interactive_mode() {
             log "WARNING" "Module non disponible (en développement)"
             log "INFO" "Seul le module 'visual' est actuellement disponible"
             echo -n "Voulez-vous installer le module visual ? (y/N): "
-            read -r confirm
+            read -r confirm < /dev/tty
             if [[ "$confirm" =~ ^[Yy]$ ]]; then
                 MODULES="visual"
             else
@@ -242,7 +242,7 @@ interactive_mode() {
     # Confirmation avant déploiement
     echo -e "${YELLOW}Modules à installer: ${WHITE}$MODULES${NC}"
     echo -n "Continuer ? (Y/n): "
-    read -r confirm
+    read -r confirm < /dev/tty
     if [[ "$confirm" =~ ^[Nn]$ ]]; then
         log "INFO" "Déploiement annulé par l'utilisateur"
         exit 0
@@ -420,6 +420,33 @@ show_final_summary() {
             log "WARNING" "Déploiement interrompu - Log: $LOG_FILE"
             ;;
     esac
+}
+
+# =================================================================
+# FONCTIONS D'AIDE
+# =================================================================
+
+show_help() {
+    echo -e "${WHITE}Setup Scripts - Déployeur principal${NC}"
+    echo
+    echo "Usage:"
+    echo "  $0 [OPTIONS]"
+    echo
+    echo "Options:"
+    echo "  -i, --interactive    Mode interactif (par défaut si aucun module spécifié)"
+    echo "  -m, --modules LIST   Modules à installer (séparés par des virgules)"
+    echo "  -h, --help          Afficher cette aide"
+    echo
+    echo "Modules disponibles:"
+    echo "  visual              Personnalisation visuelle"
+    echo
+    echo "Exemples:"
+    echo "  $0                          # Mode interactif"
+    echo "  $0 -m visual               # Installer uniquement le module visual"
+    echo "  $0 --modules visual         # Même chose avec option longue"
+    echo
+    echo "Pour utilisation avec curl:"
+    echo "  curl -sSL https://raw.githubusercontent.com/Phips02/setup-scripts/main/deploy.sh | bash -s -- -m visual"
 }
 
 # =================================================================
