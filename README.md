@@ -18,25 +18,26 @@ Déployer rapidement et de manière cohérente un environnement personnalisé su
 
 ## 🚀 Installation rapide
 
+### Installation automatique (module visual)
 ```bash
-# Installation des prérequis + clonage + déploiement
-curl -sSL https://raw.githubusercontent.com/Phips02/setup-scripts/main/deploy.sh | bash -s -- --interactive
+curl -sSL https://raw.githubusercontent.com/Phips02/setup-scripts/main/deploy.sh | bash
 ```
 
-## 🔧 Installation manuelle (recommandée)
-
+### Installation avec choix (recommandée)
 ```bash
 # 1. Installer git si nécessaire
 apt update && apt install -y git      # Debian/Ubuntu
-# yum install -y git                  # CentOS/RHEL
-# dnf install -y git                  # Fedora
 
-# 2. Cloner le repository
+# 2. Cloner et déployer
 git clone https://github.com/Phips02/setup-scripts.git
 cd setup-scripts
-
-# 3. Lancer le déployeur
 ./deploy.sh --interactive
+```
+
+### Installation rapide d'un module spécifique
+```bash
+# Module visual uniquement (prompt personnalisé)
+curl -sSL https://raw.githubusercontent.com/Phips02/setup-scripts/main/deploy.sh | bash -s -- --modules "visual"
 ```
 
 ## 📦 Modules disponibles
@@ -50,10 +51,30 @@ cd setup-scripts
 ## 🎛️ Options du déployeur
 
 ```bash
-./deploy.sh --interactive           # Mode interactif
-./deploy.sh --modules "visual"      # Module spécifique
-./deploy.sh --help                  # Aide complète
+# Mode automatique - installe le module visual
+curl -sSL [...]/deploy.sh | bash
+
+# Module spécifique via curl
+curl -sSL [...]/deploy.sh | bash -s -- --modules "visual"
+
+# Mode interactif (nécessite git clone)
+git clone https://github.com/Phips02/setup-scripts.git
+cd setup-scripts
+./deploy.sh --interactive
+
+# Aide
+./deploy.sh --help
 ```
+
+**Note** : Le mode interactif nécessite de cloner le repository pour fonctionner correctement.
+
+## 🎯 Modes d'utilisation
+
+| Commande | Description | Usage |
+|----------|-------------|-------|
+| `curl [...]/deploy.sh \| bash` | Installation automatique du module visual | VM rapide |
+| `curl [...]/deploy.sh \| bash -s -- --modules "visual"` | Installation spécifique | Sélection précise |
+| `git clone && ./deploy.sh --interactive` | Mode interactif complet | Configuration personnalisée |
 
 ## 📁 Structure
 

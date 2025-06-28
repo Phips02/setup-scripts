@@ -351,6 +351,12 @@ main() {
     # Vérifications préliminaires
     check_requirements
     
+    # Si mode interactif via curl, cloner le repo et relancer localement
+    if [[ $INTERACTIVE == true ]] && [[ ! -f "$SCRIPTS_DIR/visual/prompt-setup.sh" ]]; then
+        clone_and_rerun
+        return
+    fi
+    
     # Mode interactif si aucun module spécifié
     if [[ $INTERACTIVE == true ]] || [[ -z "$MODULES" ]]; then
         interactive_mode
@@ -367,6 +373,31 @@ main() {
     else
         show_final_summary "ERROR"
         exit 1
+    fi
+}
+
+clone_and_rerun() {
+    log "INFO" "Mode interactif détecté via curl - Clonage du repository..."
+    
+    local temp_dir="/tmp/setup-scripts-$"
+    
+    # Cloner le repository
+    if git clone https://github.com/Phips02/setup-scripts.git "$temp_dir"; then
+        log "SUCCESS" "Repository cloné dans $temp_dir"
+        
+        # Se déplacer dans le dossier et relancer le script
+        cd "$temp_dir"
+        chmod +x deploy.sh
+        
+        log "INFO" "Relancement du script en mode local..."
+        echo
+        
+        # Relancer le script localement avec les mêmes arguments
+        exec ./deploy.sh --interactive
+    else
+        log "ERROR" "Échec du clonage du repository"
+        log "INFO" "Installation du module visual uniquement..."
+        MODULES="visual"
     fi
 }
 
