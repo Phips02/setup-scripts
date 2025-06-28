@@ -3,7 +3,7 @@
 # =================================================================
 # Setup Scripts - Déployeur principal
 # Auteur: Phips
-# Version: 1.0
+# Version: 1.1
 # Description: Script de déploiement modulaire pour VMs
 # =================================================================
 
@@ -29,25 +29,14 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 NC='\033[0m' # No Color
-# Couleurs pour fonctionnalités futures (commentées)
-# PURPLE='\033[0;35m'
 
 # Variables par défaut
 INTERACTIVE=false
 MODULES=""
-# Variables pour fonctionnalités futures (commentées)
-# VERBOSE=false
-# DRY_RUN=false
-# PROFILE=""
-# CONFIG_FILE="$CONFIG_DIR/default.conf"
 
 # Modules disponibles
 AVAILABLE_MODULES=(
     "visual:Personnalisation visuelle"
-    # "security:Sécurisation système"      # À venir
-    # "tools:Outils essentiels"            # À venir  
-    # "system:Configuration système"       # À venir
-    # "services:Services et applications"  # À venir
 )
 
 # =================================================================
@@ -139,8 +128,12 @@ check_requirements() {
 fix_permissions() {
     log "INFO" "Vérification des permissions des scripts..."
     
+    # Corriger les permissions du script principal
+    chmod +x "$0" 2>/dev/null || true
+    
+    # Corriger les permissions des scripts dans le dossier scripts/
     if [[ -d "$SCRIPTS_DIR" ]]; then
-        find "$SCRIPTS_DIR" -name "*.sh" -exec chmod +x {} \; 2>/dev/null
+        find "$SCRIPTS_DIR" -name "*.sh" -exec chmod +x {} \; 2>/dev/null || true
         log "SUCCESS" "Permissions des scripts corrigées"
     fi
 }
@@ -149,31 +142,16 @@ install_prerequisites() {
     log "INFO" "Installation des prérequis..."
     
     if command -v apt-get &> /dev/null; then
-        sudo apt-get update && sudo apt-get install -y curl wget git
+        apt-get update && apt-get install -y curl wget git
     elif command -v yum &> /dev/null; then
-        sudo yum install -y curl wget git
+        yum install -y curl wget git
     elif command -v dnf &> /dev/null; then
-        sudo dnf install -y curl wget git
+        dnf install -y curl wget git
     else
         log "ERROR" "Gestionnaire de paquets non supporté"
         exit 1
     fi
 }
-
-# Fonction pour charger les profils (commentée pour l'instant)
-# load_profile() {
-#     local profile="$1"
-#     local profile_file="$CONFIG_DIR/profiles/$profile.conf"
-#     
-#     if [[ -f "$profile_file" ]]; then
-#         log "INFO" "Chargement du profil: $profile"
-#         source "$profile_file"
-#         MODULES="$PROFILE_MODULES"
-#     else
-#         log "ERROR" "Profil '$profile' non trouvé dans $profile_file"
-#         exit 1
-#     fi
-# }
 
 show_module_menu() {
     echo -e "${WHITE}Modules disponibles:${NC}"
@@ -187,7 +165,7 @@ show_module_menu() {
         ((i++))
     done
     
-    # Afficher les modules à venir (commentés)
+    # Afficher les modules à venir
     echo
     echo -e "${WHITE}À venir:${NC}"
     echo -e "${CYAN}[2]${NC} ${YELLOW}security${NC} - Sécurisation système"
@@ -207,8 +185,17 @@ interactive_mode() {
     
     show_module_menu
     
-    echo -n "Sélectionnez les modules (ex: 1 ou 'a' pour tous disponibles): "
-    read -r selection
+    local selection=""
+    while [[ -z "$selection" ]]; do
+        echo -n "Sélectionnez les modules (ex: 1 ou 'a' pour tous disponibles): "
+        read -r selection
+        
+        # Validation de l'entrée
+        if [[ -z "$selection" ]]; then
+            log "WARNING" "Veuillez faire une sélection"
+            continue
+        fi
+    done
     
     case "$selection" in
         "q"|"Q")
@@ -219,7 +206,7 @@ interactive_mode() {
             MODULES="visual"
             ;;
         "a"|"A")
-            MODULES=$(printf "%s," "${AVAILABLE_MODULES[@]}" | sed 's/:.*,/,/g' | sed 's/:.*$//' | sed 's/,$//')
+            MODULES="visual"  # Pour l'instant, seul visual est disponible
             ;;
         "2"|"3"|"4"|"5")
             log "WARNING" "Module non disponible (en développement)"
@@ -234,22 +221,13 @@ interactive_mode() {
             fi
             ;;
         *)
-            local selected_modules=()
-            IFS=',' read -ra NUMBERS <<< "$selection"
-            for num in "${NUMBERS[@]}"; do
-                if [[ "$num" == "1" ]]; then
-                    selected_modules+=("visual")
-                elif [[ "$num" =~ ^[2-5]$ ]]; then
-                    log "WARNING" "Module $num non disponible (en développement)"
-                fi
-            done
-            
-            if [[ ${#selected_modules[@]} -eq 0 ]]; then
-                log "WARNING" "Aucun module disponible sélectionné"
-                log "INFO" "Installation du module visual par défaut"
+            # Essayer de parser les numéros
+            if [[ "$selection" =~ ^[1]$ ]]; then
                 MODULES="visual"
             else
-                MODULES=$(IFS=','; echo "${selected_modules[*]}")
+                log "WARNING" "Sélection invalide: $selection"
+                log "INFO" "Installation du module visual par défaut"
+                MODULES="visual"
             fi
             ;;
     esac
@@ -260,6 +238,15 @@ interactive_mode() {
     fi
     
     log "INFO" "Modules sélectionnés: $MODULES"
+    
+    # Confirmation avant déploiement
+    echo -e "${YELLOW}Modules à installer: ${WHITE}$MODULES${NC}"
+    echo -n "Continuer ? (Y/n): "
+    read -r confirm
+    if [[ "$confirm" =~ ^[Nn]$ ]]; then
+        log "INFO" "Déploiement annulé par l'utilisateur"
+        exit 0
+    fi
 }
 
 execute_module() {
@@ -362,11 +349,6 @@ main() {
         interactive_mode
     fi
     
-    # Charger le profil si spécifié (commenté pour l'instant)
-    # if [[ -n "$PROFILE" ]]; then
-    #     load_profile "$PROFILE"
-    # fi
-    
     # Déployer les modules
     if deploy_modules; then
         show_final_summary "SUCCESS"
@@ -379,7 +361,10 @@ main() {
 clone_and_rerun() {
     log "INFO" "Mode interactif détecté via curl - Clonage du repository..."
     
-    local temp_dir="/tmp/setup-scripts-$"
+    local temp_dir="/tmp/setup-scripts-$$"
+    
+    # Nettoyer le dossier temporaire s'il existe
+    [[ -d "$temp_dir" ]] && rm -rf "$temp_dir"
     
     # Cloner le repository
     if git clone https://github.com/Phips02/setup-scripts.git "$temp_dir"; then
@@ -455,23 +440,6 @@ while [[ $# -gt 0 ]]; do
             show_help
             exit 0
             ;;
-        # Options avancées (commentées pour l'instant)
-        # -p|--profile)
-        #     PROFILE="$2"
-        #     shift 2
-        #     ;;
-        # -c|--config)
-        #     CONFIG_FILE="$2"
-        #     shift 2
-        #     ;;
-        # -v|--verbose)
-        #     VERBOSE=true
-        #     shift
-        #     ;;
-        # -d|--dry-run)
-        #     DRY_RUN=true
-        #     shift
-        #     ;;
         *)
             log "ERROR" "Option inconnue: $1"
             echo "Utilisez --help pour voir les options disponibles"
@@ -479,11 +447,6 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
-
-# Charger la configuration (commenté pour l'instant)
-# if [[ -f "$CONFIG_FILE" ]]; then
-#     source "$CONFIG_FILE"
-# fi
 
 # Lancer le déploiement
 main "$@"

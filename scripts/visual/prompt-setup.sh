@@ -2,7 +2,9 @@
 
 # Script de déploiement du prompt personnalisé
 # Auteur: Phips
-# Version: 1.0
+# Version: 1.1
+
+set -euo pipefail  # Mode strict pour une meilleure gestion d'erreurs
 
 echo "============================================"
 echo "🎯 Configuration du prompt personnalisé"
@@ -18,108 +20,191 @@ NC='\033[0m' # No Color
 # Configuration du prompt personnalisé
 CUSTOM_PS1='export PS1="\[\e[1;32m\]┌──(\[\e[m\]\[\e[1;34m\]\u\[\e[m\]\[\e[1;32m\] ► \[\e[m\]\[\e[1;34m\]\h\[\e[m\]\[\e[1;32m\])-[\[\e[m\]\[\e[38;5;214m\]\w\[\e[m\]\[\e[1;32m\]]\n└─\[\e[m\]\[\e[1;37m\]\$ \[\e[0m\]"'
 
-# Fonction de sauvegarde
+# Fonction de logging uniforme avec le script principal
+log() {
+    local level="$1"
+    shift
+    local message="$*"
+    
+    case "$level" in
+        "ERROR")   echo -e "${RED}✗ $message${NC}" ;;
+        "SUCCESS") echo -e "${GREEN}✓ $message${NC}" ;;
+        "WARNING") echo -e "${YELLOW}⚠ $message${NC}" ;;
+        "INFO")    echo -e "${BLUE}ℹ $message${NC}" ;;
+        *)         echo "$message" ;;
+    esac
+}
+
+# Fonction de sauvegarde améliorée
 backup_bashrc() {
-    if [ -f ~/.bashrc ]; then
-        cp ~/.bashrc ~/.bashrc.backup.$(date +%Y%m%d_%H%M%S)
-        echo -e "${GREEN}✓${NC} Sauvegarde de .bashrc créée"
+    if [[ -f ~/.bashrc ]]; then
+        local backup_file="$HOME/.bashrc.backup.$(date +%Y%m%d_%H%M%S)"
+        if cp ~/.bashrc "$backup_file"; then
+            log "SUCCESS" "Sauvegarde créée: $backup_file"
+            echo "$backup_file" > /tmp/bashrc_backup_location.txt  # Pour référence future
+        else
+            log "ERROR" "Impossible de créer la sauvegarde"
+            exit 1
+        fi
+    else
+        log "INFO" "Aucun fichier .bashrc existant"
     fi
 }
 
 # Fonction pour vérifier si le prompt existe déjà
 check_existing_prompt() {
     if grep -q "┌──(" ~/.bashrc 2>/dev/null; then
-        echo -e "${YELLOW}⚠${NC} Un prompt personnalisé existe déjà dans .bashrc"
-        read -p "Voulez-vous le remplacer ? (y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo -e "${BLUE}ℹ${NC} Installation annulée"
+        log "WARNING" "Un prompt personnalisé existe déjà dans .bashrc"
+        echo -n "Voulez-vous le remplacer ? (y/N): "
+        read -r reply
+        
+        if [[ ! "$reply" =~ ^[Yy]$ ]]; then
+            log "INFO" "Installation annulée par l'utilisateur"
             exit 0
         fi
+        
         # Supprimer l'ancien prompt personnalisé
-        sed -i '/┌──(/d' ~/.bashrc
-        echo -e "${GREEN}✓${NC} Ancien prompt supprimé"
+        if sed -i '/┌──(/d' ~/.bashrc; then
+            log "SUCCESS" "Ancien prompt supprimé"
+        else
+            log "ERROR" "Impossible de supprimer l'ancien prompt"
+            exit 1
+        fi
     fi
 }
 
 # Fonction principale d'installation
 install_prompt() {
-    echo -e "${BLUE}📝${NC} Configuration du prompt..."
+    log "INFO" "Configuration du prompt..."
     
     # Créer le fichier .bashrc s'il n'existe pas
     touch ~/.bashrc
     
-    # Ajouter une ligne vide et un commentaire
-    echo "" >> ~/.bashrc
-    echo "# ============================================" >> ~/.bashrc
-    echo "# Prompt personnalisé moderne" >> ~/.bashrc
-    echo "# Couleurs: Vert (bordures) | Bleu (user/host) | Orange (répertoire)" >> ~/.bashrc
-    echo "# ============================================" >> ~/.bashrc
-    echo "$CUSTOM_PS1" >> ~/.bashrc
+    # Vérifier que l'écriture est possible
+    if [[ ! -w ~/.bashrc ]]; then
+        log "ERROR" "Impossible d'écrire dans ~/.bashrc (permissions)"
+        exit 1
+    fi
     
-    echo -e "${GREEN}✓${NC} Prompt ajouté à ~/.bashrc"
+    # Ajouter le prompt avec un bloc bien délimité
+    {
+        echo ""
+        echo "# ============================================"
+        echo "# Prompt personnalisé moderne - Setup Scripts"
+        echo "# Couleurs: Vert (bordures) | Bleu (user/host) | Orange (répertoire)"
+        echo "# Date d'installation: $(date)"
+        echo "# ============================================"
+        echo "$CUSTOM_PS1"
+        echo "# ============================================"
+    } >> ~/.bashrc
+    
+    log "SUCCESS" "Prompt ajouté à ~/.bashrc"
 }
 
-# Fonction de test
+# Fonction de test améliorée
 test_prompt() {
-    echo -e "${BLUE}🧪${NC} Test du nouveau prompt..."
+    log "INFO" "Test du nouveau prompt..."
     
-    # Charger le nouveau prompt dans la session actuelle
-    source ~/.bashrc
+    # Vérifier que le prompt a été ajouté
+    if ! grep -q "┌──(" ~/.bashrc; then
+        log "ERROR" "Le prompt n'a pas été correctement ajouté"
+        exit 1
+    fi
     
-    echo -e "${GREEN}✓${NC} Prompt chargé avec succès!"
+    log "SUCCESS" "Prompt configuré avec succès!"
+    
     echo ""
     echo -e "${YELLOW}Aperçu de votre nouveau prompt:${NC}"
-    echo -e "┌──(\033[1;34m$(whoami)\033[0m \033[1;32m►\033[0m \033[1;34m$(hostname)\033[0m\033[1;32m)-[\033[38;5;214m~\033[1;32m]\033[0m"
-    echo -e "\033[1;32m└─\033[1;37m\$\033[0m"
+    echo -e "┌──(\033[1;34m$(whoami)\033[0m \033[1;32m►\033[0m \033[1;34m$(hostname)\033[0m\033[1;32m)-[\033[38;5;214m$(pwd)\033[1;32m]\033[0m"
+    echo -e "\033[1;32m└─\033[1;37m\$\033[0m echo 'Hello World!'"
+    echo ""
 }
 
-# Fonction d'information
+# Fonction d'information améliorée
 show_info() {
     echo ""
-    echo -e "${BLUE}ℹ${NC}  Informations sur votre prompt:"
+    echo -e "${BLUE}📋 Informations sur votre prompt:${NC}"
     echo -e "   • ${GREEN}Bordures vertes${NC} : style moderne et professionnel"
     echo -e "   • ${BLUE}Nom d'utilisateur/hostname en bleu${NC} : optimisé daltoniens"
     echo -e "   • Répertoire en ${YELLOW}orange${NC} : excellent contraste"
     echo -e "   • Symbole ${GREEN}►${NC} : design moderne et dynamique"
     echo ""
-    echo -e "${YELLOW}💡 Conseils:${NC}"
-    echo -e "   • Redémarrez votre terminal pour voir les changements"
+    echo -e "${YELLOW}💡 Conseils d'utilisation:${NC}"
+    echo -e "   • Pour appliquer immédiatement: ${GREEN}source ~/.bashrc${NC}"
     echo -e "   • Le prompt sera conservé après redémarrage"
-    echo -e "   • Pour restaurer l'ancien prompt: ${GREEN}cp ~/.bashrc.backup.* ~/.bashrc${NC}"
+    echo -e "   • Redémarrez votre terminal pour voir les changements"
+    
+    # Afficher le chemin de sauvegarde s'il existe
+    if [[ -f /tmp/bashrc_backup_location.txt ]]; then
+        local backup_location=$(cat /tmp/bashrc_backup_location.txt)
+        echo -e "   • Pour restaurer l'ancien prompt: ${GREEN}cp $backup_location ~/.bashrc${NC}"
+        rm -f /tmp/bashrc_backup_location.txt  # Nettoyer le fichier temporaire
+    fi
 }
 
-# Vérification des prérequis
+# Vérification des prérequis améliorée
 check_requirements() {
-    if [ ! -d "$HOME" ]; then
-        echo -e "${RED}✗${NC} Erreur: répertoire HOME non trouvé"
+    log "INFO" "Vérification des prérequis..."
+    
+    # Vérifier le répertoire HOME
+    if [[ ! -d "$HOME" ]]; then
+        log "ERROR" "Répertoire HOME non trouvé"
+        exit 1
+    fi
+    
+    # Vérifier les permissions d'écriture
+    if [[ ! -w "$HOME" ]]; then
+        log "ERROR" "Pas de permissions d'écriture dans $HOME"
         exit 1
     fi
     
     # Vérifier si on est dans un terminal compatible
-    if [ -z "$TERM" ]; then
-        echo -e "${YELLOW}⚠${NC} Terminal non détecté, installation possible mais non testée"
+    if [[ -z "${TERM:-}" ]]; then
+        log "WARNING" "Variable TERM non définie, le prompt pourrait ne pas s'afficher correctement"
     fi
+    
+    # Vérifier que bash est utilisé
+    if [[ -z "${BASH_VERSION:-}" ]]; then
+        log "WARNING" "Ce script est optimisé pour bash"
+    fi
+    
+    log "SUCCESS" "Prérequis validés"
 }
 
-# Script principal
+# Fonction de nettoyage en cas d'erreur
+cleanup_on_error() {
+    log "ERROR" "Une erreur est survenue pendant l'installation"
+    
+    # Restaurer la sauvegarde si elle existe
+    if [[ -f /tmp/bashrc_backup_location.txt ]]; then
+        local backup_location=$(cat /tmp/bashrc_backup_location.txt)
+        if [[ -f "$backup_location" ]]; then
+            log "INFO" "Restauration de la sauvegarde..."
+            cp "$backup_location" ~/.bashrc
+            log "SUCCESS" "Sauvegarde restaurée"
+        fi
+        rm -f /tmp/bashrc_backup_location.txt
+    fi
+    
+    exit 1
+}
+
+# Script principal avec gestion d'erreurs
 main() {
-    echo -e "${BLUE}🔍${NC} Vérification des prérequis..."
+    # Trap pour gérer les erreurs
+    trap cleanup_on_error ERR
+    
     check_requirements
-    
-    echo -e "${BLUE}💾${NC} Création de la sauvegarde..."
     backup_bashrc
-    
-    echo -e "${BLUE}🔍${NC} Vérification des configurations existantes..."
     check_existing_prompt
-    
     install_prompt
     test_prompt
     show_info
     
     echo ""
-    echo -e "${GREEN}🎉 Installation terminée avec succès!${NC}"
-    echo -e "${BLUE}👉${NC} Redémarrez votre terminal ou tapez: ${GREEN}source ~/.bashrc${NC}"
+    log "SUCCESS" "🎉 Installation terminée avec succès!"
+    echo -e "${BLUE}👉${NC} Pour appliquer immédiatement: ${GREEN}source ~/.bashrc${NC}"
+    echo -e "${BLUE}👉${NC} Ou redémarrez votre terminal"
 }
 
 # Exécution du script principal
