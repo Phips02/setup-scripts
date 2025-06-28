@@ -26,26 +26,28 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 NC='\033[0m' # No Color
+# Couleurs pour fonctionnalités futures (commentées)
+# PURPLE='\033[0;35m'
 
 # Variables par défaut
 INTERACTIVE=false
-VERBOSE=false
-DRY_RUN=false
-PROFILE=""
 MODULES=""
-CONFIG_FILE="$CONFIG_DIR/default.conf"
+# Variables pour fonctionnalités futures (commentées)
+# VERBOSE=false
+# DRY_RUN=false
+# PROFILE=""
+# CONFIG_FILE="$CONFIG_DIR/default.conf"
 
 # Modules disponibles
 AVAILABLE_MODULES=(
     "visual:Personnalisation visuelle"
-    "security:Sécurisation système" 
-    "tools:Outils essentiels"
-    "system:Configuration système"
-    "services:Services et applications"
+    # "security:Sécurisation système"      # À venir
+    # "tools:Outils essentiels"            # À venir  
+    # "system:Configuration système"       # À venir
+    # "services:Services et applications"  # À venir
 )
 
 # =================================================================
@@ -68,7 +70,6 @@ log() {
         "SUCCESS") echo -e "${GREEN}✓ $message${NC}" ;;
         "WARNING") echo -e "${YELLOW}⚠ $message${NC}" ;;
         "INFO")    echo -e "${BLUE}ℹ $message${NC}" ;;
-        "DEBUG")   [[ $VERBOSE == true ]] && echo -e "${PURPLE}🔍 $message${NC}" ;;
         *)         echo "$message" ;;
     esac
 }
@@ -87,24 +88,22 @@ show_help() {
 Usage: $0 [OPTIONS]
 
 Options:
-  -i, --interactive     Mode interactif (sélection manuelle)
-  -p, --profile PROF    Utiliser un profil prédéfini (dev|server|desktop)
-  -m, --modules LIST    Liste des modules (ex: visual,tools,security)
-  -c, --config FILE     Fichier de configuration personnalisé
-  -v, --verbose         Mode verbeux
-  -d, --dry-run         Simulation sans exécution
+  -i, --interactive     Mode interactif (recommandé)
+  -m, --modules LIST    Liste des modules (ex: visual)
   -h, --help           Afficher cette aide
 
 Exemples:
   $0 --interactive                    # Mode interactif
-  $0 --profile dev                    # Profil développement
-  $0 --modules "visual,tools"         # Modules spécifiques
-  $0 --config config/custom.conf     # Configuration personnalisée
+  $0 --modules "visual"               # Module visual uniquement
 
-Profils disponibles:
-  dev       Environnement de développement
-  server    Serveur de production  
-  desktop   Poste de travail
+Modules disponibles:
+  visual    Personnalisation visuelle (prompt, thèmes)
+
+Modules en développement:
+  security  Sécurisation système
+  tools     Outils essentiels
+  system    Configuration système
+  services  Services et applications
 
 EOF
 }
@@ -161,19 +160,20 @@ install_prerequisites() {
     fi
 }
 
-load_profile() {
-    local profile="$1"
-    local profile_file="$CONFIG_DIR/profiles/$profile.conf"
-    
-    if [[ -f "$profile_file" ]]; then
-        log "INFO" "Chargement du profil: $profile"
-        source "$profile_file"
-        MODULES="$PROFILE_MODULES"
-    else
-        log "ERROR" "Profil '$profile' non trouvé dans $profile_file"
-        exit 1
-    fi
-}
+# Fonction pour charger les profils (commentée pour l'instant)
+# load_profile() {
+#     local profile="$1"
+#     local profile_file="$CONFIG_DIR/profiles/$profile.conf"
+#     
+#     if [[ -f "$profile_file" ]]; then
+#         log "INFO" "Chargement du profil: $profile"
+#         source "$profile_file"
+#         MODULES="$PROFILE_MODULES"
+#     else
+#         log "ERROR" "Profil '$profile' non trouvé dans $profile_file"
+#         exit 1
+#     fi
+# }
 
 show_module_menu() {
     echo -e "${WHITE}Modules disponibles:${NC}"
@@ -187,9 +187,17 @@ show_module_menu() {
         ((i++))
     done
     
+    # Afficher les modules à venir (commentés)
+    echo
+    echo -e "${WHITE}À venir:${NC}"
+    echo -e "${CYAN}[2]${NC} ${YELLOW}security${NC} - Sécurisation système"
+    echo -e "${CYAN}[3]${NC} ${YELLOW}tools${NC} - Outils essentiels"
+    echo -e "${CYAN}[4]${NC} ${YELLOW}system${NC} - Configuration système"
+    echo -e "${CYAN}[5]${NC} ${YELLOW}services${NC} - Services et applications"
+    
     echo
     echo -e "${WHITE}Options:${NC}"
-    echo -e "${CYAN}[a]${NC} Tous les modules"
+    echo -e "${CYAN}[a]${NC} Tous les modules disponibles"
     echo -e "${CYAN}[q]${NC} Quitter"
     echo
 }
@@ -199,7 +207,7 @@ interactive_mode() {
     
     show_module_menu
     
-    echo -n "Sélectionnez les modules (ex: 1,3,5 ou 'a' pour tous): "
+    echo -n "Sélectionnez les modules (ex: 1 ou 'a' pour tous disponibles): "
     read -r selection
     
     case "$selection" in
@@ -207,19 +215,42 @@ interactive_mode() {
             log "INFO" "Déploiement annulé par l'utilisateur"
             exit 0
             ;;
+        "1")
+            MODULES="visual"
+            ;;
         "a"|"A")
             MODULES=$(printf "%s," "${AVAILABLE_MODULES[@]}" | sed 's/:.*,/,/g' | sed 's/:.*$//' | sed 's/,$//')
+            ;;
+        "2"|"3"|"4"|"5")
+            log "WARNING" "Module non disponible (en développement)"
+            log "INFO" "Seul le module 'visual' est actuellement disponible"
+            echo -n "Voulez-vous installer le module visual ? (y/N): "
+            read -r confirm
+            if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                MODULES="visual"
+            else
+                log "INFO" "Déploiement annulé"
+                exit 0
+            fi
             ;;
         *)
             local selected_modules=()
             IFS=',' read -ra NUMBERS <<< "$selection"
             for num in "${NUMBERS[@]}"; do
-                if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le "${#AVAILABLE_MODULES[@]}" ]; then
-                    local module_name="${AVAILABLE_MODULES[$((num-1))]%%:*}"
-                    selected_modules+=("$module_name")
+                if [[ "$num" == "1" ]]; then
+                    selected_modules+=("visual")
+                elif [[ "$num" =~ ^[2-5]$ ]]; then
+                    log "WARNING" "Module $num non disponible (en développement)"
                 fi
             done
-            MODULES=$(IFS=','; echo "${selected_modules[*]}")
+            
+            if [[ ${#selected_modules[@]} -eq 0 ]]; then
+                log "WARNING" "Aucun module disponible sélectionné"
+                log "INFO" "Installation du module visual par défaut"
+                MODULES="visual"
+            else
+                MODULES=$(IFS=','; echo "${selected_modules[*]}")
+            fi
             ;;
     esac
     
@@ -261,18 +292,14 @@ execute_module() {
             local script_name=$(basename "$script")
             log "INFO" "[$script_num/$script_count] Exécution de: $script_name"
             
-            if [[ $DRY_RUN == true ]]; then
-                log "DEBUG" "[DRY-RUN] $script"
+            # Donner les permissions si nécessaire
+            chmod +x "$script" 2>/dev/null || true
+            
+            if bash "$script"; then
+                log "SUCCESS" "$script_name terminé avec succès"
             else
-                # Donner les permissions si nécessaire
-                chmod +x "$script" 2>/dev/null || true
-                
-                if bash "$script"; then
-                    log "SUCCESS" "$script_name terminé avec succès"
-                else
-                    log "ERROR" "Échec de $script_name"
-                    return 1
-                fi
+                log "ERROR" "Échec de $script_name"
+                return 1
             fi
         fi
     done
@@ -325,14 +352,14 @@ main() {
     check_requirements
     
     # Mode interactif si aucun module spécifié
-    if [[ $INTERACTIVE == true ]] || [[ -z "$MODULES" && -z "$PROFILE" ]]; then
+    if [[ $INTERACTIVE == true ]] || [[ -z "$MODULES" ]]; then
         interactive_mode
     fi
     
-    # Charger le profil si spécifié
-    if [[ -n "$PROFILE" ]]; then
-        load_profile "$PROFILE"
-    fi
+    # Charger le profil si spécifié (commenté pour l'instant)
+    # if [[ -n "$PROFILE" ]]; then
+    #     load_profile "$PROFILE"
+    # fi
     
     # Déployer les modules
     if deploy_modules; then
@@ -389,42 +416,43 @@ while [[ $# -gt 0 ]]; do
             INTERACTIVE=true
             shift
             ;;
-        -p|--profile)
-            PROFILE="$2"
-            shift 2
-            ;;
         -m|--modules)
             MODULES="$2"
             shift 2
-            ;;
-        -c|--config)
-            CONFIG_FILE="$2"
-            shift 2
-            ;;
-        -v|--verbose)
-            VERBOSE=true
-            shift
-            ;;
-        -d|--dry-run)
-            DRY_RUN=true
-            shift
             ;;
         -h|--help)
             show_help
             exit 0
             ;;
+        # Options avancées (commentées pour l'instant)
+        # -p|--profile)
+        #     PROFILE="$2"
+        #     shift 2
+        #     ;;
+        # -c|--config)
+        #     CONFIG_FILE="$2"
+        #     shift 2
+        #     ;;
+        # -v|--verbose)
+        #     VERBOSE=true
+        #     shift
+        #     ;;
+        # -d|--dry-run)
+        #     DRY_RUN=true
+        #     shift
+        #     ;;
         *)
             log "ERROR" "Option inconnue: $1"
-            show_help
+            echo "Utilisez --help pour voir les options disponibles"
             exit 1
             ;;
     esac
 done
 
-# Charger la configuration
-if [[ -f "$CONFIG_FILE" ]]; then
-    source "$CONFIG_FILE"
-fi
+# Charger la configuration (commenté pour l'instant)
+# if [[ -f "$CONFIG_FILE" ]]; then
+#     source "$CONFIG_FILE"
+# fi
 
 # Lancer le déploiement
 main "$@"
