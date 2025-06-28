@@ -338,8 +338,9 @@ main() {
     # Vérifications préliminaires
     check_requirements
     
-    # Si mode interactif via curl, cloner le repo et relancer localement
-    if [[ $INTERACTIVE == true ]] && [[ ! -f "$SCRIPTS_DIR/visual/prompt-setup.sh" ]]; then
+    # Détecter si on est en mode curl (pas de scripts locaux disponibles)
+    if [[ ! -f "$SCRIPTS_DIR/visual/prompt-setup.sh" ]] && [[ ! -d "$SCRIPTS_DIR/visual" ]]; then
+        log "INFO" "Scripts non trouvés localement - Clonage du repository..."
         clone_and_rerun
         return
     fi
@@ -359,7 +360,7 @@ main() {
 }
 
 clone_and_rerun() {
-    log "INFO" "Mode interactif détecté via curl - Clonage du repository..."
+    log "INFO" "Scripts non disponibles localement - Clonage du repository..."
     
     local temp_dir="/tmp/setup-scripts-$$"
     
@@ -377,12 +378,18 @@ clone_and_rerun() {
         log "INFO" "Relancement du script en mode local..."
         echo
         
-        # Relancer le script localement avec les mêmes arguments
-        exec ./deploy.sh --interactive
+        # Relancer le script localement en mode interactif
+        if [[ -n "$MODULES" ]]; then
+            # Si des modules sont déjà spécifiés, les utiliser
+            exec ./deploy.sh --modules "$MODULES"
+        else
+            # Sinon, mode interactif
+            exec ./deploy.sh --interactive
+        fi
     else
         log "ERROR" "Échec du clonage du repository"
-        log "INFO" "Installation du module visual uniquement..."
-        MODULES="visual"
+        log "ERROR" "Impossible de continuer sans les scripts"
+        exit 1
     fi
 }
 
@@ -474,6 +481,11 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Si aucun module spécifié, activer le mode interactif
+if [[ -z "$MODULES" ]]; then
+    INTERACTIVE=true
+fi
 
 # Lancer le déploiement
 main "$@"
